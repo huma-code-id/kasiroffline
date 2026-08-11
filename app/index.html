@@ -419,12 +419,25 @@
                     <div class="view-switch report-period-switch">
                         <button :class="{ active: reportPeriod === 'daily' }" @click="setReportPeriod('daily')">Harian</button>
                         <button :class="{ active: reportPeriod === 'monthly' }" @click="setReportPeriod('monthly')">Bulanan</button>
+                        <button :class="{ active: reportPeriod === 'custom' }" @click="setReportPeriod('custom')">Rentang</button>
                     </div>
-                    <div class="input-group">
+
+                    <template v-if="reportPeriod === 'custom'">
+                        <div class="input-group">
+                            <label>Dari tanggal</label>
+                            <input v-model="reportDateFrom" type="date" />
+                        </div>
+                        <div class="input-group">
+                            <label>Sampai tanggal</label>
+                            <input v-model="reportDateTo" type="date" />
+                        </div>
+                    </template>
+                    <div v-else class="input-group">
                         <label>{{ reportPeriod === 'daily' ? 'Tanggal' : 'Bulan' }}</label>
                         <input v-if="reportPeriod === 'daily'" v-model="reportDate" type="date" />
                         <input v-else v-model="reportDate" type="month" />
                     </div>
+
                     <button class="btn-sm btn-connect" :disabled="loadingReport" @click="loadReport">
                         {{ loadingReport ? 'Memuat...' : 'Muat Laporan' }}
                     </button>

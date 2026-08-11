@@ -338,8 +338,9 @@ export async function pullSuppliers(config) {
 // LAPORAN
 // ========================
 
-// period: 'daily' | 'monthly'. date: 'YYYY-MM-DD' (daily) atau 'YYYY-MM' (monthly).
-export async function fetchReport(config, period, date) {
+// period: 'daily' | 'monthly' | 'custom'. date: 'YYYY-MM-DD' (daily/custom) atau 'YYYY-MM' (monthly).
+// dateEnd cuma dipakai untuk period 'custom' ('YYYY-MM-DD', tanggal akhir rentang, inklusif).
+export async function fetchReport(config, period, date, dateEnd) {
     const envelope = {
         action: 'get_report',
         device_id: config.device_id,
@@ -347,6 +348,7 @@ export async function fetchReport(config, period, date) {
         timestamp: new Date().toISOString(),
         period,
         date,
+        date_end: dateEnd,
     };
     const result = await postJSON(config.gas_endpoint, envelope);
     if (!result.success) {

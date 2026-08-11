@@ -51,6 +51,7 @@ body {
     cursor: pointer;
     font-weight: 600;
     font-size: 13px;
+    flex-shrink: 0;
 }
 
 .view-switch button.active {
@@ -153,16 +154,98 @@ body {
 }
 
 @media (max-width: 768px) {
+    #app {
+        padding: 10px;
+        gap: 12px;
+    }
+
     .app-container {
         grid-template-columns: 1fr;
+        gap: 12px;
     }
+
+    /* Header: judul di atas, nav jadi tab bar yang bisa digeser (bukan kepotong/meluber),
+       status bar melebar penuh di bawahnya -- ini yang benerin menu "Riwayat/Laporan" kepotong. */
+    .header {
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .header h1 {
+        font-size: 17px;
+        text-align: center;
+    }
+
+    .view-switch {
+        width: 100%;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+    }
+
+    .view-switch::-webkit-scrollbar {
+        display: none;
+    }
+
+    .view-switch button {
+        white-space: nowrap;
+    }
+
+    .status-bar {
+        width: 100%;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 12px;
+    }
+
+    .status-indicator {
+        padding: 5px 10px;
+    }
+
+    .section {
+        padding: 14px;
+    }
+
+    /* Produk: 2 kolom lebih enak dibaca di HP daripada 3 kolom yang dipaksakan sempit. */
     .product-grid {
-        grid-template-columns: repeat(3, 1fr) !important;
+        grid-template-columns: repeat(2, 1fr);
     }
+
+    /* Tabel data (Produk/Riwayat/Laporan): digeser horizontal, bukan ditumpuk jadi kolom
+       tunggal tanpa label -- kolom tunggal tanpa header bikin data tidak jelas ini apa. */
+    .product-table {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
     .product-table-head,
     .product-row {
-        grid-template-columns: 1fr !important;
-        gap: 4px !important;
+        min-width: 560px;
+    }
+
+    .simple-list-row {
+        flex-wrap: wrap;
+    }
+
+    .btn-group {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .modal-content {
+        padding: 18px;
+    }
+}
+
+@media (max-width: 420px) {
+    .product-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .stat-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
 }
 

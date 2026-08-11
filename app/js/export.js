@@ -5,22 +5,25 @@ function paymentMethodLabel(pm) {
     return (pm || 'lainnya').toUpperCase();
 }
 
-function periodLabel(period, date) {
+function periodLabel(period, date, dateEnd) {
     if (period === 'monthly') {
         const [y, m] = (date || '').split('-');
         const names = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
         return `${names[Number(m) - 1] || m} ${y}`;
     }
+    if (period === 'custom' && dateEnd && dateEnd !== date) {
+        return `${date || ''} s.d. ${dateEnd}`;
+    }
     return date || '';
 }
 
-export function exportReportToExcel(reportData, config, period, date) {
+export function exportReportToExcel(reportData, config, period, date, dateEnd) {
     if (!window.XLSX) {
         throw new Error('Library Excel belum siap dimuat (perlu koneksi internet), coba lagi sebentar');
     }
 
     const wb = XLSX.utils.book_new();
-    const label = periodLabel(period, date);
+    const label = periodLabel(period, date, dateEnd);
 
     const summaryRows = [
         ['Toko', config.store_name || ''],
@@ -66,14 +69,14 @@ export function exportReportToExcel(reportData, config, period, date) {
     XLSX.writeFile(wb, filename);
 }
 
-export function exportReportToPdf(reportData, config, period, date) {
+export function exportReportToPdf(reportData, config, period, date, dateEnd) {
     if (!window.jspdf || !window.jspdf.jsPDF) {
         throw new Error('Library PDF belum siap dimuat (perlu koneksi internet), coba lagi sebentar');
     }
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    const label = periodLabel(period, date);
+    const label = periodLabel(period, date, dateEnd);
     const rupiah = (n) => 'Rp ' + Math.round(n || 0).toLocaleString('id-ID');
 
     doc.setFontSize(14);

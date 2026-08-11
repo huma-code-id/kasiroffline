@@ -613,10 +613,12 @@ createApp({
         };
 
         // ========================
-        // LAPORAN HARIAN / BULANAN (gabungan semua device, dari Google Sheets)
+        // LAPORAN HARIAN / BULANAN / RENTANG (gabungan semua device, dari Google Sheets)
         // ========================
-        const reportPeriod = ref('daily'); // 'daily' | 'monthly'
+        const reportPeriod = ref('daily'); // 'daily' | 'monthly' | 'custom'
         const reportDate = ref(todayStr());
+        const reportDateFrom = ref(todayStr());
+        const reportDateTo = ref(todayStr());
         const reportData = ref(null);
         const loadingReport = ref(false);
 
@@ -625,7 +627,14 @@ createApp({
             reportPeriod.value = period;
             reportData.value = null;
             const now = new Date();
-            reportDate.value = period === 'daily' ? todayStr() : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            if (period === 'daily') {
+                reportDate.value = todayStr();
+            } else if (period === 'monthly') {
+                reportDate.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            } else if (period === 'custom') {
+                reportDateFrom.value = todayStr();
+                reportDateTo.value = todayStr();
+            }
         };
 
         const loadReport = async () => {
@@ -637,9 +646,17 @@ createApp({
                 showNotification('Lengkapi ⚙️ Pengaturan dulu', 'error');
                 return;
             }
+            if (reportPeriod.value === 'custom' && reportDateFrom.value > reportDateTo.value) {
+                showNotification('"Dari tanggal" tidak boleh lebih besar dari "Sampai tanggal"', 'error');
+                return;
+            }
             loadingReport.value = true;
             try {
-                reportData.value = await fetchReport(config.value, reportPeriod.value, reportDate.value);
+                if (reportPeriod.value === 'custom') {
+                    reportData.value = await fetchReport(config.value, 'custom', reportDateFrom.value, reportDateTo.value);
+                } else {
+                    reportData.value = await fetchReport(config.value, reportPeriod.value, reportDate.value);
+                }
             } catch (error) {
                 showNotification(`Gagal memuat laporan: ${error.message}`, 'error');
             } finally {
@@ -650,7 +667,7 @@ createApp({
         const handleExportExcel = () => {
             if (!reportData.value) return;
             try {
-                exportReportToExcel(reportData.value, config.value, reportPeriod.value, reportDate.value);
+                exportReportToExcel(reportData.value, config.value, reportData.value.period, reportData.value.date, reportData.value.date_end);
             } catch (error) {
                 showNotification(error.message, 'error');
             }
@@ -659,7 +676,7 @@ createApp({
         const handleExportPdf = () => {
             if (!reportData.value) return;
             try {
-                exportReportToPdf(reportData.value, config.value, reportPeriod.value, reportDate.value);
+                exportReportToPdf(reportData.value, config.value, reportData.value.period, reportData.value.date, reportData.value.date_end);
             } catch (error) {
                 showNotification(error.message, 'error');
             }
@@ -960,6 +977,8 @@ createApp({
 
             reportPeriod,
             reportDate,
+            reportDateFrom,
+            reportDateTo,
             reportData,
             loadingReport,
             setReportPeriod,
