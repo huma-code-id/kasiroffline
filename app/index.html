@@ -21,8 +21,12 @@
             <h1>💰 {{ config.store_name || 'Kasir Offline' }}</h1>
 
             <nav class="view-switch">
-                <button :class="{ active: currentView === 'kasir' }" @click="currentView = 'kasir'">🧾 Kasir</button>
-                <button :class="{ active: currentView === 'produk' }" @click="currentView = 'produk'">📦 Kelola Produk</button>
+                <button :class="{ active: currentView === 'kasir' }" @click="switchView('kasir')">🧾 Kasir</button>
+                <button :class="{ active: currentView === 'produk' }" @click="switchView('produk')">📦 Produk</button>
+                <button :class="{ active: currentView === 'kategori' }" @click="switchView('kategori')">🏷️ Kategori</button>
+                <button :class="{ active: currentView === 'supplier' }" @click="switchView('supplier')">🚚 Supplier</button>
+                <button :class="{ active: currentView === 'riwayat' }" @click="switchView('riwayat')">📜 Riwayat</button>
+                <button :class="{ active: currentView === 'laporan' }" @click="switchView('laporan')">📊 Laporan</button>
             </nav>
 
             <div class="status-bar">
@@ -61,6 +65,8 @@
                             :class="{ selected: isInCart(product.id) }"
                             @click="addToCart(product)"
                         >
+                            <img v-if="productImageSrc(product)" :src="productImageSrc(product)" class="product-thumb" alt="" />
+                            <div v-else class="product-thumb product-thumb-placeholder">📦</div>
                             <div class="product-name">{{ product.name }}</div>
                             <div class="product-price">{{ rupiah(product.price) }}</div>
                             <div
@@ -206,7 +212,7 @@
                     <input v-model="productSearch" type="text" placeholder="🔍 Cari produk..." class="product-search" />
                     <select v-model="productCategoryFilter">
                         <option value="">Semua kategori</option>
-                        <option v-for="cat in productCategories" :key="cat" :value="cat">{{ cat }}</option>
+                        <option v-for="cat in activeCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
                     </select>
                     <button class="btn btn-primary" @click="openAddProduct">+ Tambah Produk</button>
                 </div>
@@ -218,6 +224,7 @@
 
                 <div v-else class="product-table">
                     <div class="product-table-head">
+                        <div>Foto</div>
                         <div>Nama</div>
                         <div>Kategori</div>
                         <div>Harga</div>
@@ -226,11 +233,15 @@
                         <div>Aksi</div>
                     </div>
                     <div v-for="p in filteredProducts" :key="p.id" class="product-row" :class="{ inactive: !p.active }">
+                        <div>
+                            <img v-if="productImageSrc(p)" :src="productImageSrc(p)" class="product-row-thumb" alt="" />
+                            <div v-else class="product-row-thumb product-thumb-placeholder">📦</div>
+                        </div>
                         <div class="product-row-name">
                             {{ p.name }}
                             <span v-if="p.sync_status === 'pending'" class="badge-pending">belum sync</span>
                         </div>
-                        <div>{{ p.category || '-' }}</div>
+                        <div>{{ categoryNameById(p.category_id) || '-' }}</div>
                         <div>{{ rupiah(p.price) }}</div>
                         <div>{{ p.stock === null || p.stock === undefined ? '—' : p.stock }}</div>
                         <div>{{ p.active ? 'Aktif' : 'Nonaktif' }}</div>
@@ -243,6 +254,186 @@
                             >
                                 {{ p.active ? 'Nonaktifkan' : 'Aktifkan' }}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== KELOLA KATEGORI VIEW ==================== -->
+        <div class="app-container" v-if="currentView === 'kategori'">
+            <div class="section" style="grid-column: 1 / -1">
+                <div class="section-title-row">
+                    <div class="section-title">🏷️ Kelola Kategori</div>
+                    <button class="btn-sm btn-connect" @click="openAddCategory">+ Tambah Kategori</button>
+                </div>
+
+                <div v-if="categories.length === 0" class="empty-state">
+                    <div class="empty-state-icon">🏷️</div>
+                    <p>Belum ada kategori. Klik "+ Tambah Kategori" untuk mulai.</p>
+                </div>
+
+                <div v-else class="simple-list">
+                    <div v-for="cat in categories" :key="cat.id" class="simple-list-row" :class="{ inactive: !cat.active }">
+                        <div class="simple-list-name">
+                            {{ cat.name }}
+                            <span v-if="cat.sync_status === 'pending'" class="badge-pending">belum sync</span>
+                        </div>
+                        <div class="simple-list-actions">
+                            <button class="btn-sm btn-connect" @click="openEditCategory(cat)">Edit</button>
+                            <button class="btn-sm" :class="cat.active ? 'btn-disconnect' : 'btn-test'" @click="toggleCategoryActive(cat)">
+                                {{ cat.active ? 'Nonaktifkan' : 'Aktifkan' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== KELOLA SUPPLIER VIEW ==================== -->
+        <div class="app-container" v-if="currentView === 'supplier'">
+            <div class="section" style="grid-column: 1 / -1">
+                <div class="section-title-row">
+                    <div class="section-title">🚚 Kelola Supplier</div>
+                    <button class="btn-sm btn-connect" @click="openAddSupplier">+ Tambah Supplier</button>
+                </div>
+
+                <div v-if="suppliers.length === 0" class="empty-state">
+                    <div class="empty-state-icon">🚚</div>
+                    <p>Belum ada supplier. Fitur ini opsional — produk boleh tanpa supplier.</p>
+                </div>
+
+                <div v-else class="simple-list">
+                    <div v-for="sup in suppliers" :key="sup.id" class="simple-list-row" :class="{ inactive: !sup.active }">
+                        <div class="simple-list-name">
+                            {{ sup.name }}
+                            <span v-if="sup.sync_status === 'pending'" class="badge-pending">belum sync</span>
+                            <div class="simple-list-meta">{{ [sup.phone, sup.address].filter(Boolean).join(' · ') || '-' }}</div>
+                        </div>
+                        <div class="simple-list-actions">
+                            <button class="btn-sm btn-connect" @click="openEditSupplier(sup)">Edit</button>
+                            <button class="btn-sm" :class="sup.active ? 'btn-disconnect' : 'btn-test'" @click="toggleSupplierActive(sup)">
+                                {{ sup.active ? 'Nonaktifkan' : 'Aktifkan' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== RIWAYAT TRANSAKSI VIEW ==================== -->
+        <div class="app-container" v-if="currentView === 'riwayat'">
+            <div class="section" style="grid-column: 1 / -1">
+                <div class="section-title">📜 Riwayat Transaksi (device ini)</div>
+                <div class="date-filter-row">
+                    <div class="input-group">
+                        <label>Dari tanggal</label>
+                        <input v-model="historyDateFrom" type="date" />
+                    </div>
+                    <div class="input-group">
+                        <label>Sampai tanggal</label>
+                        <input v-model="historyDateTo" type="date" />
+                    </div>
+                    <div class="history-summary">
+                        {{ filteredHistory.length }} transaksi · Total {{ rupiah(historyTotal) }}
+                    </div>
+                </div>
+
+                <div v-if="filteredHistory.length === 0" class="empty-state">
+                    <div class="empty-state-icon">📜</div>
+                    <p>Tidak ada transaksi pada rentang tanggal ini.</p>
+                </div>
+
+                <div v-else class="product-table history-table">
+                    <div class="product-table-head">
+                        <div>Waktu</div>
+                        <div>Kasir</div>
+                        <div>Total</div>
+                        <div>Status</div>
+                        <div>Aksi</div>
+                    </div>
+                    <div v-for="t in filteredHistory" :key="t.id" class="product-row">
+                        <div>{{ new Date(t.timestamp).toLocaleString('id-ID') }}</div>
+                        <div>{{ t.cashier }}</div>
+                        <div>{{ rupiah(t.total) }}</div>
+                        <div><span class="queue-status" :class="t.sync_status">{{ t.sync_status }}</span></div>
+                        <div class="product-row-actions">
+                            <button class="btn-sm btn-connect" @click="openHistoryReceipt(t)">Lihat Struk</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== LAPORAN VIEW ==================== -->
+        <div class="app-container" v-if="currentView === 'laporan'">
+            <div class="section" style="grid-column: 1 / -1">
+                <div class="section-title">📊 Laporan (gabungan semua device — butuh online)</div>
+
+                <div class="date-filter-row">
+                    <div class="view-switch report-period-switch">
+                        <button :class="{ active: reportPeriod === 'daily' }" @click="setReportPeriod('daily')">Harian</button>
+                        <button :class="{ active: reportPeriod === 'monthly' }" @click="setReportPeriod('monthly')">Bulanan</button>
+                    </div>
+                    <div class="input-group">
+                        <label>{{ reportPeriod === 'daily' ? 'Tanggal' : 'Bulan' }}</label>
+                        <input v-if="reportPeriod === 'daily'" v-model="reportDate" type="date" />
+                        <input v-else v-model="reportDate" type="month" />
+                    </div>
+                    <button class="btn-sm btn-connect" :disabled="loadingReport" @click="loadReport">
+                        {{ loadingReport ? 'Memuat...' : 'Muat Laporan' }}
+                    </button>
+                </div>
+
+                <div v-if="!reportData" class="empty-state">
+                    <div class="empty-state-icon">📊</div>
+                    <p>Klik "Muat Laporan" untuk melihat data.</p>
+                </div>
+
+                <div v-else>
+                    <div class="stat-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Omzet</div>
+                            <div class="stat-value">{{ rupiah(reportData.total_omzet) }}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Jumlah Transaksi</div>
+                            <div class="stat-value">{{ reportData.total_transaksi }}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Diskon</div>
+                            <div class="stat-value">{{ rupiah(reportData.total_diskon) }}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Pajak</div>
+                            <div class="stat-value">{{ rupiah(reportData.total_pajak) }}</div>
+                        </div>
+                    </div>
+
+                    <div class="report-columns">
+                        <div>
+                            <div class="section-title">Metode Pembayaran</div>
+                            <div v-if="reportData.by_payment_method.length === 0" class="empty-state"><p>Tidak ada data.</p></div>
+                            <div v-for="pm in reportData.by_payment_method" :key="pm.method" class="simple-list-row">
+                                <div class="simple-list-name">{{ pm.method.toUpperCase() }} ({{ pm.count }}x)</div>
+                                <div>{{ rupiah(pm.total) }}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="section-title">Per Kasir</div>
+                            <div v-if="reportData.by_cashier.length === 0" class="empty-state"><p>Tidak ada data.</p></div>
+                            <div v-for="c in reportData.by_cashier" :key="c.cashier" class="simple-list-row">
+                                <div class="simple-list-name">{{ c.cashier }} ({{ c.count }}x)</div>
+                                <div>{{ rupiah(c.total) }}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="section-title">Produk Terlaris</div>
+                            <div v-if="reportData.top_products.length === 0" class="empty-state"><p>Tidak ada data.</p></div>
+                            <div v-for="tp in reportData.top_products" :key="tp.name" class="simple-list-row">
+                                <div class="simple-list-name">{{ tp.name }} ({{ tp.qty }} terjual)</div>
+                                <div>{{ rupiah(tp.total) }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -285,17 +476,83 @@
                     <input v-model.number="productForm.price" type="number" min="0" placeholder="0" />
                 </div>
                 <div class="input-group">
-                    <label>Kategori</label>
-                    <input v-model="productForm.category" type="text" placeholder="mis. minuman" />
+                    <label>Kategori (opsional)</label>
+                    <select v-model="productForm.category_id">
+                        <option value="">Tanpa kategori</option>
+                        <option v-for="cat in activeCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Supplier (opsional)</label>
+                    <select v-model="productForm.supplier_id">
+                        <option value="">Tidak ada supplier</option>
+                        <option v-for="sup in activeSuppliers" :key="sup.id" :value="sup.id">{{ sup.name }}</option>
+                    </select>
                 </div>
                 <div class="input-group">
                     <label>Stok (kosongkan jika tidak dilacak)</label>
                     <input v-model="productForm.stock" type="number" placeholder="Tidak dilacak" />
                 </div>
+                <div class="input-group">
+                    <label>Foto Produk (opsional)</label>
+                    <div v-if="productForm.image_local_data || productForm.image_url" class="image-preview-row">
+                        <img :src="productForm.image_local_data || productForm.image_url" class="image-preview" alt="" />
+                        <button type="button" class="btn-sm btn-disconnect" @click="removeProductImage">Hapus Foto</button>
+                    </div>
+                    <input type="file" accept="image/*" @change="handleProductImageChange" />
+                </div>
 
                 <div class="btn-group">
                     <button class="btn btn-secondary" @click="showProductModal = false">Batal</button>
                     <button class="btn btn-primary" @click="saveProductForm">Simpan</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CATEGORY ADD/EDIT MODAL -->
+        <div class="modal" :class="{ active: showCategoryModal }">
+            <div class="modal-content">
+                <span class="modal-close" @click="showCategoryModal = false">&times;</span>
+                <div class="modal-title">{{ editingCategoryId ? 'Edit Kategori' : 'Tambah Kategori' }}</div>
+
+                <div class="input-group">
+                    <label>Nama Kategori</label>
+                    <input v-model="categoryForm.name" type="text" placeholder="mis. Minuman" />
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn btn-secondary" @click="showCategoryModal = false">Batal</button>
+                    <button class="btn btn-primary" @click="saveCategoryForm">Simpan</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUPPLIER ADD/EDIT MODAL -->
+        <div class="modal" :class="{ active: showSupplierModal }">
+            <div class="modal-content">
+                <span class="modal-close" @click="showSupplierModal = false">&times;</span>
+                <div class="modal-title">{{ editingSupplierId ? 'Edit Supplier' : 'Tambah Supplier' }}</div>
+
+                <div class="input-group">
+                    <label>Nama Supplier</label>
+                    <input v-model="supplierForm.name" type="text" placeholder="mis. CV Kopi Nusantara" />
+                </div>
+                <div class="input-group">
+                    <label>Telepon</label>
+                    <input v-model="supplierForm.phone" type="text" placeholder="0812xxxxxxx" />
+                </div>
+                <div class="input-group">
+                    <label>Alamat</label>
+                    <input v-model="supplierForm.address" type="text" />
+                </div>
+                <div class="input-group">
+                    <label>Catatan</label>
+                    <input v-model="supplierForm.notes" type="text" placeholder="opsional" />
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn btn-secondary" @click="showSupplierModal = false">Batal</button>
+                    <button class="btn btn-primary" @click="saveSupplierForm">Simpan</button>
                 </div>
             </div>
         </div>

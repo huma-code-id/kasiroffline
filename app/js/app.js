@@ -1,23 +1,31 @@
 import {
     initDB,
     saveTransaction,
+    getAllTransactions,
     getTransactionsByStatus,
     getAllProducts,
     getProductById,
     upsertProduct,
     decrementStock,
+    getAllCategories,
+    upsertCategory,
+    getAllSuppliers,
+    upsertSupplier,
 } from './db.js';
 import { loadConfig, saveConfig, isConfigured } from './config.js';
 import { generateReceiptText, formatReceiptESCPOS, generateTestReceipt } from './receipt.js';
+import { resizeImageToDataURL } from './image.js';
 import {
     connectPrinter as bluetoothConnect,
     disconnectPrinter as bluetoothDisconnect,
     printText,
     isBluetoothSupported,
 } from './printer.js';
-import { performSync, syncTransaction, syncProduct } from './sync.js';
+import { performSync, syncTransaction, syncProduct, syncCategory, syncSupplier, uploadProductImage, fetchReport } from './sync.js';
 
 const { createApp, ref, computed, onMounted } = Vue;
+
+const todayStr = () => new Date().toISOString().slice(0, 10);
 
 createApp({
     setup() {
@@ -25,10 +33,178 @@ createApp({
         // CONFIG & VIEW STATE
         // ========================
         const config = ref(loadConfig());
-        const currentView = ref('kasir'); // 'kasir' | 'produk'
+        const currentView = ref('kasir'); // 'kasir' | 'produk' | 'kategori' | 'supplier' | 'riwayat' | 'laporan'
         const bluetoothSupported = isBluetoothSupported();
 
         const rupiah = (n) => 'Rp ' + Math.round(n || 0).toLocaleString('id-ID');
+
+        const switchView = (view) => {
+            currentView.value = view;
+            if (view === 'riwayat') loadTransactionHistory();
+        };
+
+        // ========================
+        // KATEGORI
+        // ========================
+        const categories = ref([]);
+        const showCategoryModal = ref(false);
+        const editingCategoryId = ref(null);
+        const categoryForm = ref({ name: '' });
+
+        const loadCategories = async () => {
+            categories.value = await getAllCategories();
+        };
+
+        const activeCategories = computed(() => categories.value.filter((c) => c.active !== false));
+
+        const categoryNameById = (id) => {
+            const cat = categories.value.find((c) => c.id === id);
+            return cat ? cat.name : null;
+        };
+
+        const openAddCategory = () => {
+            editingCategoryId.value = null;
+            categoryForm.value = { name: '' };
+            showCategoryModal.value = true;
+        };
+
+        const openEditCategory = (category) => {
+            editingCategoryId.value = category.id;
+            categoryForm.value = { name: category.name };
+            showCategoryModal.value = true;
+        };
+
+        const saveCategoryForm = async () => {
+            const name = categoryForm.value.name.trim();
+            if (!name) {
+                showNotification('Nama kategori wajib diisi', 'error');
+                return;
+            }
+
+            const now = new Date().toISOString();
+            let category;
+
+            if (editingCategoryId.value) {
+                const existing = categories.value.find((c) => c.id === editingCategoryId.value);
+                category = { ...existing, name, updated_at: now, sync_status: 'pending' };
+            } else {
+                category = {
+                    id: `CAT-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    name,
+                    active: true,
+                    updated_at: now,
+                    sync_status: 'pending',
+                    device_id: config.value.device_id,
+                };
+            }
+
+            await upsertCategory(category);
+            await loadCategories();
+            showCategoryModal.value = false;
+            showNotification('Kategori disimpan', 'success');
+
+            if (navigator.onLine && isConfigured(config.value)) {
+                syncCategory(config.value, category);
+            }
+        };
+
+        const toggleCategoryActive = async (category) => {
+            const updated = { ...category, active: !category.active, updated_at: new Date().toISOString(), sync_status: 'pending' };
+            await upsertCategory(updated);
+            await loadCategories();
+            showNotification(updated.active ? 'Kategori diaktifkan' : 'Kategori dinonaktifkan', 'info');
+
+            if (navigator.onLine && isConfigured(config.value)) {
+                syncCategory(config.value, updated);
+            }
+        };
+
+        // ========================
+        // SUPPLIER
+        // ========================
+        const suppliers = ref([]);
+        const showSupplierModal = ref(false);
+        const editingSupplierId = ref(null);
+        const supplierForm = ref({ name: '', phone: '', address: '', notes: '' });
+
+        const loadSuppliers = async () => {
+            suppliers.value = await getAllSuppliers();
+        };
+
+        const activeSuppliers = computed(() => suppliers.value.filter((s) => s.active !== false));
+
+        const supplierNameById = (id) => {
+            const sup = suppliers.value.find((s) => s.id === id);
+            return sup ? sup.name : null;
+        };
+
+        const openAddSupplier = () => {
+            editingSupplierId.value = null;
+            supplierForm.value = { name: '', phone: '', address: '', notes: '' };
+            showSupplierModal.value = true;
+        };
+
+        const openEditSupplier = (supplier) => {
+            editingSupplierId.value = supplier.id;
+            supplierForm.value = {
+                name: supplier.name,
+                phone: supplier.phone || '',
+                address: supplier.address || '',
+                notes: supplier.notes || '',
+            };
+            showSupplierModal.value = true;
+        };
+
+        const saveSupplierForm = async () => {
+            const name = supplierForm.value.name.trim();
+            if (!name) {
+                showNotification('Nama supplier wajib diisi', 'error');
+                return;
+            }
+
+            const now = new Date().toISOString();
+            let supplier;
+            const fields = {
+                name,
+                phone: supplierForm.value.phone.trim(),
+                address: supplierForm.value.address.trim(),
+                notes: supplierForm.value.notes.trim(),
+            };
+
+            if (editingSupplierId.value) {
+                const existing = suppliers.value.find((s) => s.id === editingSupplierId.value);
+                supplier = { ...existing, ...fields, updated_at: now, sync_status: 'pending' };
+            } else {
+                supplier = {
+                    id: `SUP-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    ...fields,
+                    active: true,
+                    updated_at: now,
+                    sync_status: 'pending',
+                    device_id: config.value.device_id,
+                };
+            }
+
+            await upsertSupplier(supplier);
+            await loadSuppliers();
+            showSupplierModal.value = false;
+            showNotification('Supplier disimpan', 'success');
+
+            if (navigator.onLine && isConfigured(config.value)) {
+                syncSupplier(config.value, supplier);
+            }
+        };
+
+        const toggleSupplierActive = async (supplier) => {
+            const updated = { ...supplier, active: !supplier.active, updated_at: new Date().toISOString(), sync_status: 'pending' };
+            await upsertSupplier(updated);
+            await loadSuppliers();
+            showNotification(updated.active ? 'Supplier diaktifkan' : 'Supplier dinonaktifkan', 'info');
+
+            if (navigator.onLine && isConfigured(config.value)) {
+                syncSupplier(config.value, updated);
+            }
+        };
 
         // ========================
         // PRODUCTS
@@ -39,30 +215,36 @@ createApp({
         const productCategoryFilter = ref('');
         const showProductModal = ref(false);
         const editingProductId = ref(null);
-        const productForm = ref({ name: '', price: 0, category: '', stock: null });
+        const emptyProductForm = () => ({
+            name: '',
+            price: 0,
+            category_id: '',
+            supplier_id: '',
+            stock: null,
+            image_local_data: null,
+            image_url: '',
+        });
+        const productForm = ref(emptyProductForm());
 
         const loadProducts = async () => {
             allProducts.value = await getAllProducts();
             products.value = allProducts.value.filter((p) => p.active !== false);
         };
 
+        const productImageSrc = (product) => product.image_local_data || product.image_url || '';
+
         const filteredProducts = computed(() => {
             const q = productSearch.value.trim().toLowerCase();
             return allProducts.value.filter((p) => {
                 const matchesSearch = !q || p.name.toLowerCase().includes(q);
-                const matchesCategory = !productCategoryFilter.value || p.category === productCategoryFilter.value;
+                const matchesCategory = !productCategoryFilter.value || p.category_id === productCategoryFilter.value;
                 return matchesSearch && matchesCategory;
             });
         });
 
-        const productCategories = computed(() => {
-            const set = new Set(allProducts.value.map((p) => p.category).filter(Boolean));
-            return Array.from(set).sort();
-        });
-
         const openAddProduct = () => {
             editingProductId.value = null;
-            productForm.value = { name: '', price: 0, category: '', stock: null };
+            productForm.value = emptyProductForm();
             showProductModal.value = true;
         };
 
@@ -71,16 +253,37 @@ createApp({
             productForm.value = {
                 name: product.name,
                 price: product.price,
-                category: product.category || '',
+                category_id: product.category_id || '',
+                supplier_id: product.supplier_id || '',
                 stock: product.stock === null || product.stock === undefined ? null : product.stock,
+                image_local_data: product.image_local_data || null,
+                image_url: product.image_url || '',
             };
             showProductModal.value = true;
         };
 
+        const handleProductImageChange = async (event) => {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            try {
+                productForm.value.image_local_data = await resizeImageToDataURL(file, 800, 0.7);
+            } catch (error) {
+                showNotification(`Gagal memproses foto: ${error.message}`, 'error');
+            } finally {
+                event.target.value = '';
+            }
+        };
+
+        const removeProductImage = () => {
+            productForm.value.image_local_data = null;
+            productForm.value.image_url = '';
+        };
+
         const pushProductSync = (product) => {
             if (isOnline.value && isConfigured(config.value)) {
-                syncProduct(config.value, product);
+                return syncProduct(config.value, product);
             }
+            return Promise.resolve(false);
         };
 
         const saveProductForm = async () => {
@@ -97,6 +300,7 @@ createApp({
                     ? null
                     : Number(productForm.value.stock);
 
+            const hasNewImage = Boolean(productForm.value.image_local_data);
             const now = new Date().toISOString();
             let product;
 
@@ -106,30 +310,49 @@ createApp({
                     ...existing,
                     name,
                     price,
-                    category: productForm.value.category.trim(),
+                    category_id: productForm.value.category_id || null,
+                    supplier_id: productForm.value.supplier_id || null,
                     stock: stockValue,
                     updated_at: now,
                     sync_status: 'pending',
                 };
+                if (!hasNewImage && !productForm.value.image_url) {
+                    product.image_url = ''; // foto dihapus manual lewat tombol "Hapus Foto"
+                }
             } else {
                 product = {
                     id: `PRD-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                     name,
                     price,
-                    category: productForm.value.category.trim(),
+                    category_id: productForm.value.category_id || null,
+                    supplier_id: productForm.value.supplier_id || null,
                     stock: stockValue,
                     active: true,
                     updated_at: now,
                     sync_status: 'pending',
                     device_id: config.value.device_id,
+                    image_url: '',
                 };
+            }
+
+            if (hasNewImage) {
+                product.image_local_data = productForm.value.image_local_data;
+                product.image_pending_upload = true;
             }
 
             await upsertProduct(product);
             await loadProducts();
             showProductModal.value = false;
             showNotification('Produk disimpan', 'success');
-            pushProductSync(product);
+
+            // Produk dulu (baris di Sheets harus ada), baru upload foto -- supaya kolom
+            // ImageUrl-nya bisa ditempel ke baris yang benar. Kalau offline, keduanya
+            // otomatis menyusul lewat performSync() saat online lagi.
+            pushProductSync(product).then(() => {
+                if (hasNewImage && navigator.onLine && isConfigured(config.value)) {
+                    uploadProductImage(config.value, product).then(() => loadProducts());
+                }
+            });
         };
 
         const toggleProductActive = async (product) => {
@@ -271,6 +494,71 @@ createApp({
         };
 
         // ========================
+        // RIWAYAT TRANSAKSI (device ini saja, dari IndexedDB lokal)
+        // ========================
+        const allTransactions = ref([]);
+        const historyDateFrom = ref(todayStr());
+        const historyDateTo = ref(todayStr());
+
+        const loadTransactionHistory = async () => {
+            allTransactions.value = await getAllTransactions();
+        };
+
+        const filteredHistory = computed(() => {
+            return allTransactions.value
+                .filter((t) => {
+                    const day = (t.timestamp || '').slice(0, 10);
+                    if (historyDateFrom.value && day < historyDateFrom.value) return false;
+                    if (historyDateTo.value && day > historyDateTo.value) return false;
+                    return true;
+                })
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        });
+
+        const historyTotal = computed(() => filteredHistory.value.reduce((sum, t) => sum + (t.total || 0), 0));
+
+        const openHistoryReceipt = (txn) => {
+            lastTransaction.value = txn;
+            receiptPreview.value = generateReceiptText(txn, config.value);
+            showReceiptModal.value = true;
+        };
+
+        // ========================
+        // LAPORAN HARIAN / BULANAN (gabungan semua device, dari Google Sheets)
+        // ========================
+        const reportPeriod = ref('daily'); // 'daily' | 'monthly'
+        const reportDate = ref(todayStr());
+        const reportData = ref(null);
+        const loadingReport = ref(false);
+
+        const setReportPeriod = (period) => {
+            if (reportPeriod.value === period) return;
+            reportPeriod.value = period;
+            reportData.value = null;
+            const now = new Date();
+            reportDate.value = period === 'daily' ? todayStr() : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        };
+
+        const loadReport = async () => {
+            if (!navigator.onLine) {
+                showNotification('Laporan butuh koneksi internet (data gabungan semua device)', 'error');
+                return;
+            }
+            if (!isConfigured(config.value)) {
+                showNotification('Lengkapi ⚙️ Pengaturan dulu', 'error');
+                return;
+            }
+            loadingReport.value = true;
+            try {
+                reportData.value = await fetchReport(config.value, reportPeriod.value, reportDate.value);
+            } catch (error) {
+                showNotification(`Gagal memuat laporan: ${error.message}`, 'error');
+            } finally {
+                loadingReport.value = false;
+            }
+        };
+
+        // ========================
         // PRINTER
         // ========================
         const printerConnected = ref(false);
@@ -317,7 +605,18 @@ createApp({
                 if (!result.skipped) {
                     await refreshPendingTransactions();
                     await loadProducts();
-                    if (result.transactions || result.productsPushed || result.productsPulled) {
+                    await loadCategories();
+                    await loadSuppliers();
+                    const anythingSynced =
+                        result.transactions ||
+                        result.productsPushed ||
+                        result.productsPulled ||
+                        result.categoriesPushed ||
+                        result.categoriesPulled ||
+                        result.suppliersPushed ||
+                        result.suppliersPulled ||
+                        result.imagesUploaded;
+                    if (anythingSynced) {
                         showNotification('Sinkronisasi selesai', 'success');
                     }
                 }
@@ -375,6 +674,8 @@ createApp({
         onMounted(async () => {
             await initDB();
             await loadProducts();
+            await loadCategories();
+            await loadSuppliers();
             await refreshPendingTransactions();
 
             window.addEventListener('online', handleOnline);
@@ -402,17 +703,42 @@ createApp({
         return {
             config,
             currentView,
+            switchView,
             bluetoothSupported,
             rupiah,
 
+            categories,
+            activeCategories,
+            categoryNameById,
+            showCategoryModal,
+            editingCategoryId,
+            categoryForm,
+            openAddCategory,
+            openEditCategory,
+            saveCategoryForm,
+            toggleCategoryActive,
+
+            suppliers,
+            activeSuppliers,
+            supplierNameById,
+            showSupplierModal,
+            editingSupplierId,
+            supplierForm,
+            openAddSupplier,
+            openEditSupplier,
+            saveSupplierForm,
+            toggleSupplierActive,
+
             products,
             filteredProducts,
-            productCategories,
             productSearch,
             productCategoryFilter,
             showProductModal,
             editingProductId,
             productForm,
+            productImageSrc,
+            handleProductImageChange,
+            removeProductImage,
             openAddProduct,
             openEditProduct,
             saveProductForm,
@@ -440,6 +766,19 @@ createApp({
             lastTransaction,
             handlePrintReceipt,
             pendingTransactions,
+
+            historyDateFrom,
+            historyDateTo,
+            filteredHistory,
+            historyTotal,
+            openHistoryReceipt,
+
+            reportPeriod,
+            reportDate,
+            reportData,
+            loadingReport,
+            setReportPeriod,
+            loadReport,
 
             printerConnected,
             connectedPrinterName,

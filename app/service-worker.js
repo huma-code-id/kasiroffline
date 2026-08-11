@@ -3,7 +3,7 @@
 // di-intercept sama sekali, jadi selalu langsung ke network (tidak relevan di-cache & tidak
 // boleh diam-diam gagal karena cache).
 
-const CACHE_NAME = 'kasir-offline-v1';
+const CACHE_NAME = 'kasir-offline-v2';
 
 const APP_SHELL = [
     './',
@@ -13,6 +13,7 @@ const APP_SHELL = [
     './js/config.js',
     './js/crypto.js',
     './js/db.js',
+    './js/image.js',
     './js/printer.js',
     './js/receipt.js',
     './js/sync.js',

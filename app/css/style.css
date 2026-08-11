@@ -221,6 +221,51 @@ body {
     font-weight: 600;
 }
 
+.product-thumb {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    background: #f3f4f6;
+}
+
+.product-thumb-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    color: #d1d5db;
+}
+
+.product-row-thumb {
+    width: 36px;
+    height: 36px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #d1d5db;
+}
+
+.image-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.image-preview {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: #f3f4f6;
+}
+
 /* CART */
 .cart-items {
     flex: 1;
@@ -604,11 +649,16 @@ body {
 .product-table-head,
 .product-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 0.7fr 0.8fr 1.4fr;
+    grid-template-columns: 0.5fr 2fr 1fr 1fr 0.7fr 0.8fr 1.4fr;
     gap: 10px;
     padding: 10px 8px;
     align-items: center;
     font-size: 13px;
+}
+
+.history-table .product-table-head,
+.history-table .product-row {
+    grid-template-columns: 1.6fr 1fr 1fr 0.8fr 1fr;
 }
 
 .product-table-head {
@@ -648,6 +698,119 @@ body {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
+}
+
+/* SIMPLE LIST (kategori & supplier) */
+.simple-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.simple-list-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 8px;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 13px;
+}
+
+.simple-list-row.inactive {
+    opacity: 0.5;
+}
+
+.simple-list-name {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.simple-list-meta {
+    font-weight: 400;
+    color: #6b7280;
+    font-size: 12px;
+    width: 100%;
+}
+
+.simple-list-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+/* RIWAYAT & LAPORAN FILTER ROW */
+.date-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+}
+
+.date-filter-row .input-group {
+    margin-bottom: 0;
+}
+
+.history-summary {
+    font-size: 13px;
+    font-weight: 600;
+    color: #667eea;
+    padding-bottom: 8px;
+}
+
+.report-period-switch {
+    align-self: flex-end;
+}
+
+.report-period-switch button {
+    background: #f3f4f6;
+    color: #667eea;
+}
+
+.report-period-switch button.active {
+    background: #667eea;
+    color: white;
+}
+
+/* LAPORAN STAT CARDS */
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+.stat-card {
+    background: #f8f9fa;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 6px;
+}
+
+.stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #667eea;
+}
+
+.report-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+}
+
+.report-columns .simple-list-row {
+    padding: 8px 4px;
 }
 
 /* NOTIFICATIONS */
