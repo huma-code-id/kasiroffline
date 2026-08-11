@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#667eea" />
+    <meta name="description" content="Aplikasi kasir offline-first dengan manajemen produk dan sinkronisasi cloud" />
+
+    <title>Kasir Offline</title>
+
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+    <div id="app">
+        <!-- HEADER -->
+        <div class="header">
+            <h1>💰 {{ config.store_name || 'Kasir Offline' }}</h1>
+
+            <nav class="view-switch">
+                <button :class="{ active: currentView === 'kasir' }" @click="currentView = 'kasir'">🧾 Kasir</button>
+                <button :class="{ active: currentView === 'produk' }" @click="currentView = 'produk'">📦 Kelola Produk</button>
+            </nav>
+
+            <div class="status-bar">
+                <div class="status-indicator">
+                    <div class="status-dot" :class="isOnline ? 'online' : 'offline'"></div>
+                    <span>{{ isOnline ? 'Online' : 'Offline' }}</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot" :class="printerConnected ? 'printer-ok' : 'printer-fail'"></div>
+                    <span>{{ printerConnected ? 'Printer Ready' : 'No Printer' }}</span>
+                </div>
+                <div class="status-indicator">
+                    <span>{{ pendingTransactions.length }} pending</span>
+                </div>
+                <button class="btn-icon" @click="openSettings" title="Pengaturan">⚙️</button>
+            </div>
+        </div>
+
+        <!-- ==================== KASIR VIEW ==================== -->
+        <div class="app-container" v-if="currentView === 'kasir'">
+            <!-- LEFT PANEL -->
+            <div class="left-panel">
+                <!-- PRODUCTS SECTION -->
+                <div class="section">
+                    <div class="section-title">📦 Pilih Produk</div>
+                    <div v-if="products.length === 0" class="empty-state">
+                        <div class="empty-state-icon">📦</div>
+                        <p>Belum ada produk aktif.</p>
+                        <p>Tambahkan lewat menu "Kelola Produk".</p>
+                    </div>
+                    <div v-else class="product-grid">
+                        <div
+                            v-for="product in products"
+                            :key="product.id"
+                            class="product-card"
+                            :class="{ selected: isInCart(product.id) }"
+                            @click="addToCart(product)"
+                        >
+                            <div class="product-name">{{ product.name }}</div>
+                            <div class="product-price">{{ rupiah(product.price) }}</div>
+                            <div
+                                v-if="product.stock !== null && product.stock !== undefined"
+                                class="product-stock"
+                                :class="{ low: product.stock <= 5 }"
+                            >
+                                Stok: {{ product.stock }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PRINTER SECTION -->
+                <div class="section">
+                    <div class="section-title">🖨️ Printer Bluetooth</div>
+                    <div v-if="!bluetoothSupported" class="empty-state">
+                        <p>Browser ini tidak mendukung Web Bluetooth.</p>
+                        <p>Gunakan Chrome/Edge di Android atau Windows.</p>
+                    </div>
+                    <div v-else class="printer-section">
+                        <div v-if="!printerConnected" class="printer-status">
+                            <div class="printer-name">Tidak terhubung</div>
+                            <div class="printer-action">
+                                <button class="btn-sm btn-connect" @click="handleConnectPrinter">Hubungkan</button>
+                            </div>
+                        </div>
+                        <div v-else class="printer-status">
+                            <div class="printer-name">{{ connectedPrinterName || 'Terkoneksi' }}</div>
+                            <div class="printer-action">
+                                <button class="btn-sm btn-test" @click="handleTestPrinter">Test Print</button>
+                                <button class="btn-sm btn-disconnect" @click="handleDisconnectPrinter">Putus</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OFFLINE QUEUE -->
+                <div class="section">
+                    <div class="section-title-row">
+                        <div class="section-title">📤 Antrian Sync</div>
+                        <button class="btn-sm btn-connect" :disabled="!isOnline || syncing" @click="runSync">
+                            {{ syncing ? 'Menyinkron...' : 'Sync Sekarang' }}
+                        </button>
+                    </div>
+                    <div v-if="pendingTransactions.length === 0" class="empty-state">
+                        <div class="empty-state-icon">✓</div>
+                        <p>Semua sinkron</p>
+                    </div>
+                    <div v-else class="queue-list">
+                        <div v-for="txn in pendingTransactions" :key="txn.id" class="queue-item">
+                            <span>{{ txn.id.slice(0, 12) }}... {{ rupiah(txn.total) }}</span>
+                            <span class="queue-status" :class="txn.sync_status">{{ txn.sync_status }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL -->
+            <div class="right-panel">
+                <!-- CART -->
+                <div class="section">
+                    <div class="section-title">🛒 Keranjang</div>
+                    <div v-if="cart.length === 0" class="empty-state">
+                        <div class="empty-state-icon">🛒</div>
+                        <p>Keranjang kosong</p>
+                    </div>
+                    <div v-else class="cart-items">
+                        <div v-for="item in cart" :key="item.id" class="cart-item">
+                            <div class="cart-item-info">
+                                <div class="cart-item-name">{{ item.name }}</div>
+                                <div class="cart-item-meta">{{ rupiah(item.price) }} x {{ item.qty }}</div>
+                            </div>
+                            <div style="font-weight: 600">{{ rupiah(item.price * item.qty) }}</div>
+                            <div class="cart-item-qty">
+                                <button class="qty-btn" @click="decrementQty(item.id)">−</button>
+                                <span style="width: 30px; text-align: center">{{ item.qty }}</span>
+                                <button class="qty-btn" @click="incrementQty(item.id)">+</button>
+                            </div>
+                            <button class="cart-item-remove" @click="removeFromCart(item.id)">✕</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUMMARY -->
+                <div class="section">
+                    <div class="summary">
+                        <div class="summary-row">
+                            <span>Subtotal:</span>
+                            <span>{{ rupiah(subtotal) }}</span>
+                        </div>
+                        <div class="input-group">
+                            <label>Diskon (%)</label>
+                            <input v-model.number="discountPercent" type="number" min="0" max="100" placeholder="0" />
+                        </div>
+                        <div class="summary-row">
+                            <span>Diskon:</span>
+                            <span>− {{ rupiah(discountAmount) }}</span>
+                        </div>
+                        <div class="input-group">
+                            <label>Pajak (%)</label>
+                            <input v-model.number="taxPercent" type="number" min="0" max="100" placeholder="0" />
+                        </div>
+                        <div class="summary-row">
+                            <span>Pajak:</span>
+                            <span>+ {{ rupiah(taxAmount) }}</span>
+                        </div>
+                        <div class="summary-row total">
+                            <span>Total:</span>
+                            <span>{{ rupiah(total) }}</span>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Kasir</label>
+                            <input v-model="cashierName" type="text" placeholder="Nama kasir" />
+                        </div>
+
+                        <div class="input-group">
+                            <label>Metode Pembayaran</label>
+                            <select v-model="paymentMethod">
+                                <option value="cash">Tunai</option>
+                                <option value="transfer">Transfer</option>
+                                <option value="qris">QRIS</option>
+                                <option value="gopay">GoPay</option>
+                            </select>
+                        </div>
+
+                        <div class="btn-group">
+                            <button class="btn btn-secondary" @click="clearCart">🗑️ Batal</button>
+                            <button class="btn btn-primary" @click="completeTransaction" :disabled="cart.length === 0">
+                                ✓ Selesai & Print
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== KELOLA PRODUK VIEW ==================== -->
+        <div class="app-container product-view" v-if="currentView === 'produk'">
+            <div class="section" style="grid-column: 1 / -1">
+                <div class="product-manage-header">
+                    <input v-model="productSearch" type="text" placeholder="🔍 Cari produk..." class="product-search" />
+                    <select v-model="productCategoryFilter">
+                        <option value="">Semua kategori</option>
+                        <option v-for="cat in productCategories" :key="cat" :value="cat">{{ cat }}</option>
+                    </select>
+                    <button class="btn btn-primary" @click="openAddProduct">+ Tambah Produk</button>
+                </div>
+
+                <div v-if="filteredProducts.length === 0" class="empty-state">
+                    <div class="empty-state-icon">📦</div>
+                    <p>Belum ada produk. Klik "+ Tambah Produk" untuk mulai.</p>
+                </div>
+
+                <div v-else class="product-table">
+                    <div class="product-table-head">
+                        <div>Nama</div>
+                        <div>Kategori</div>
+                        <div>Harga</div>
+                        <div>Stok</div>
+                        <div>Status</div>
+                        <div>Aksi</div>
+                    </div>
+                    <div v-for="p in filteredProducts" :key="p.id" class="product-row" :class="{ inactive: !p.active }">
+                        <div class="product-row-name">
+                            {{ p.name }}
+                            <span v-if="p.sync_status === 'pending'" class="badge-pending">belum sync</span>
+                        </div>
+                        <div>{{ p.category || '-' }}</div>
+                        <div>{{ rupiah(p.price) }}</div>
+                        <div>{{ p.stock === null || p.stock === undefined ? '—' : p.stock }}</div>
+                        <div>{{ p.active ? 'Aktif' : 'Nonaktif' }}</div>
+                        <div class="product-row-actions">
+                            <button class="btn-sm btn-connect" @click="openEditProduct(p)">Edit</button>
+                            <button
+                                class="btn-sm"
+                                :class="p.active ? 'btn-disconnect' : 'btn-test'"
+                                @click="toggleProductActive(p)"
+                            >
+                                {{ p.active ? 'Nonaktifkan' : 'Aktifkan' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== MODALS ==================== -->
+
+        <!-- RECEIPT PREVIEW MODAL -->
+        <div class="modal" :class="{ active: showReceiptModal }">
+            <div class="modal-content">
+                <span class="modal-close" @click="showReceiptModal = false">&times;</span>
+                <div class="modal-title">📄 Preview Nota</div>
+                <div class="receipt-preview">{{ receiptPreview }}</div>
+                <div v-if="lastTransaction" class="sync-status" :class="lastTransaction.sync_status">
+                    <strong>Status:</strong> {{ lastTransaction.sync_status }}
+                    <br /><strong>ID:</strong> {{ lastTransaction.id }}
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-secondary" @click="showReceiptModal = false">Tutup</button>
+                    <button class="btn btn-primary" @click="handlePrintReceipt" :disabled="!printerConnected">
+                        🖨️ Print Ulang
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PRODUCT ADD/EDIT MODAL -->
+        <div class="modal" :class="{ active: showProductModal }">
+            <div class="modal-content">
+                <span class="modal-close" @click="showProductModal = false">&times;</span>
+                <div class="modal-title">{{ editingProductId ? 'Edit Produk' : 'Tambah Produk' }}</div>
+
+                <div class="input-group">
+                    <label>Nama Produk</label>
+                    <input v-model="productForm.name" type="text" placeholder="mis. Kopi Hitam" />
+                </div>
+                <div class="input-group">
+                    <label>Harga (Rp)</label>
+                    <input v-model.number="productForm.price" type="number" min="0" placeholder="0" />
+                </div>
+                <div class="input-group">
+                    <label>Kategori</label>
+                    <input v-model="productForm.category" type="text" placeholder="mis. minuman" />
+                </div>
+                <div class="input-group">
+                    <label>Stok (kosongkan jika tidak dilacak)</label>
+                    <input v-model="productForm.stock" type="number" placeholder="Tidak dilacak" />
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn btn-secondary" @click="showProductModal = false">Batal</button>
+                    <button class="btn btn-primary" @click="saveProductForm">Simpan</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS MODAL -->
+        <div class="modal" :class="{ active: showSettingsModal }">
+            <div class="modal-content">
+                <span class="modal-close" @click="showSettingsModal = false">&times;</span>
+                <div class="modal-title">⚙️ Pengaturan</div>
+
+                <div class="input-group">
+                    <label>Nama Toko</label>
+                    <input v-model="settingsForm.store_name" type="text" />
+                </div>
+                <div class="input-group">
+                    <label>Alamat Toko</label>
+                    <input v-model="settingsForm.store_address" type="text" />
+                </div>
+                <div class="input-group">
+                    <label>Telepon Toko</label>
+                    <input v-model="settingsForm.store_phone" type="text" />
+                </div>
+                <div class="input-group">
+                    <label>Device ID (unik per perangkat)</label>
+                    <input v-model="settingsForm.device_id" type="text" />
+                </div>
+                <div class="input-group">
+                    <label>GAS Endpoint URL</label>
+                    <input v-model="settingsForm.gas_endpoint" type="text" placeholder="https://script.google.com/macros/s/.../exec" />
+                </div>
+                <div class="input-group">
+                    <label>API Key</label>
+                    <input v-model="settingsForm.api_key" type="text" />
+                </div>
+                <div class="input-group">
+                    <label>API Secret</label>
+                    <input v-model="settingsForm.api_secret" type="password" />
+                </div>
+                <div class="input-group">
+                    <label>Pajak Default (%)</label>
+                    <input v-model.number="settingsForm.default_tax_percent" type="number" min="0" max="100" />
+                </div>
+                <div class="input-group">
+                    <label>Nama Kasir Default</label>
+                    <input v-model="settingsForm.default_cashier" type="text" />
+                </div>
+                <div class="input-group">
+                    <label>Service UUID Printer Kustom (opsional)</label>
+                    <input v-model="settingsForm.printer_service_uuid" type="text" placeholder="Isi jika printer tidak terdeteksi otomatis" />
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn btn-secondary" @click="showSettingsModal = false">Batal</button>
+                    <button class="btn btn-primary" @click="saveSettings">Simpan</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- NOTIFICATIONS -->
+        <div v-for="(notif, idx) in notifications" :key="notif.id" class="notification" :class="notif.type" :style="{ bottom: (20 + idx * 60) + 'px' }">
+            {{ notif.message }}
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script type="module" src="./js/app.js"></script>
+</body>
+</html>
