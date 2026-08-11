@@ -37,6 +37,20 @@ body {
     font-size: 22px;
 }
 
+.app-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.app-logo {
+    height: 36px;
+    width: 36px;
+    border-radius: 9px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
 .view-switch {
     display: flex;
     gap: 6px;
@@ -235,6 +249,54 @@ body {
 
     .modal-content {
         padding: 18px;
+    }
+
+    /* LAPORAN & RIWAYAT: baris filter jadi tumpuk vertikal penuh-lebar, bukan sekumpulan
+       elemen sempit yang saling wrap berdempetan (itu yang bikin terasa "kayak desktop"
+       dipaksa masuk ke layar kecil). */
+    .date-filter-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .date-filter-row .input-group,
+    .date-filter-row .report-period-switch {
+        width: 100%;
+    }
+
+    .report-period-switch {
+        display: flex;
+    }
+
+    .report-period-switch button {
+        flex: 1;
+    }
+
+    .date-filter-row > .btn-sm {
+        width: 100%;
+    }
+
+    .history-summary {
+        padding-bottom: 0;
+    }
+
+    .stat-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .report-columns {
+        grid-template-columns: 1fr;
+    }
+
+    .history-table .product-table-head,
+    .history-table .product-row {
+        min-width: 480px;
+    }
+
+    .report-tx-table .product-table-head,
+    .report-tx-table .product-row {
+        min-width: 420px;
     }
 }
 

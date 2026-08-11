@@ -11,6 +11,7 @@
     <title>Kasir Offline</title>
 
     <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" href="./icons/icon-192.png" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
     <link rel="stylesheet" href="./css/style.css" />
 </head>
@@ -18,7 +19,10 @@
     <div id="app">
         <!-- HEADER -->
         <div class="header">
-            <h1>💰 {{ config.store_name || 'Kasir Offline' }}</h1>
+            <h1 class="app-title">
+                <img src="./icons/icon-192.png" alt="" class="app-logo" />
+                {{ config.store_name || 'Kasir Offline' }}
+            </h1>
 
             <nav class="view-switch">
                 <button :class="{ active: currentView === 'kasir' }" @click="switchView('kasir')">🧾 Kasir</button>
