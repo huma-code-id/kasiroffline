@@ -207,6 +207,28 @@
                             </select>
                         </div>
 
+                        <template v-if="paymentMethod === 'cash'">
+                            <div class="input-group">
+                                <label>Uang Diterima (opsional)</label>
+                                <input v-model.number="cashReceived" type="number" min="0" placeholder="Kosongkan jika pas" />
+                            </div>
+                            <div v-if="changeAmount !== null" class="summary-row" :class="changeAmount >= 0 ? 'total' : 'warning'">
+                                <span>{{ changeAmount >= 0 ? 'Kembalian:' : 'Kurang:' }}</span>
+                                <span>{{ rupiah(Math.abs(changeAmount)) }}</span>
+                            </div>
+                        </template>
+
+                        <template v-else>
+                            <div class="input-group">
+                                <label>Bukti Pembayaran (opsional)</label>
+                                <div v-if="proofLocalData" class="image-preview-row">
+                                    <img :src="proofLocalData" class="image-preview" alt="" />
+                                    <button type="button" class="btn-sm btn-disconnect" @click="removeProofPhoto">Hapus Foto</button>
+                                </div>
+                                <input type="file" accept="image/*" capture="environment" @change="handleProofPhotoChange" />
+                            </div>
+                        </template>
+
                         <div class="btn-group">
                             <button class="btn btn-secondary" @click="clearCart">🗑️ Batal</button>
                             <button class="btn btn-primary" @click="completeTransaction" :disabled="cart.length === 0">
@@ -363,6 +385,7 @@
                         <div>Kasir</div>
                         <div>Total</div>
                         <div>Status</div>
+                        <div>Bukti</div>
                         <div>Aksi</div>
                     </div>
                     <div v-for="t in filteredHistory" :key="t.id" class="product-row">
@@ -370,6 +393,15 @@
                         <div>{{ t.cashier }}</div>
                         <div>{{ rupiah(t.total) }}</div>
                         <div><span class="queue-status" :class="t.sync_status">{{ t.sync_status }}</span></div>
+                        <div>
+                            <a v-if="t.proof_url" :href="t.proof_url" target="_blank" rel="noopener">Lihat</a>
+                            <span v-else-if="t.proof_pending_upload">Menunggu upload</span>
+                            <span v-else-if="t.payment_method === 'cash'">-</span>
+                            <label v-else class="btn-sm btn-connect file-btn">
+                                📎 Upload
+                                <input type="file" accept="image/*" capture="environment" @change="attachProofLater(t, $event)" hidden />
+                            </label>
+                        </div>
                         <div class="product-row-actions">
                             <button class="btn-sm btn-connect" @click="openHistoryReceipt(t)">Lihat Struk</button>
                         </div>
@@ -396,6 +428,10 @@
                     <button class="btn-sm btn-connect" :disabled="loadingReport" @click="loadReport">
                         {{ loadingReport ? 'Memuat...' : 'Muat Laporan' }}
                     </button>
+                    <template v-if="reportData">
+                        <button class="btn-sm btn-test" @click="handleExportExcel">⬇️ Excel</button>
+                        <button class="btn-sm btn-test" @click="handleExportPdf">⬇️ PDF</button>
+                    </template>
                 </div>
 
                 <div v-if="!reportData" class="empty-state">
@@ -446,6 +482,30 @@
                             <div v-for="tp in reportData.top_products" :key="tp.name" class="simple-list-row">
                                 <div class="simple-list-name">{{ tp.name }} ({{ tp.qty }} terjual)</div>
                                 <div>{{ rupiah(tp.total) }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-title" style="margin-top: 20px">Daftar Transaksi</div>
+                    <div v-if="reportData.transactions.length === 0" class="empty-state"><p>Tidak ada transaksi.</p></div>
+                    <div v-else class="product-table report-tx-table">
+                        <div class="product-table-head">
+                            <div>Waktu</div>
+                            <div>Kasir</div>
+                            <div>Metode</div>
+                            <div>Total</div>
+                            <div>Bukti</div>
+                        </div>
+                        <div v-for="t in reportData.transactions" :key="t.id" class="product-row">
+                            <div>{{ new Date(t.timestamp).toLocaleString('id-ID') }}</div>
+                            <div>{{ t.cashier }}</div>
+                            <div>{{ t.payment_method.toUpperCase() }}</div>
+                            <div>{{ rupiah(t.total) }}</div>
+                            <div>
+                                <a v-if="t.proof_url" :href="t.proof_url" target="_blank" rel="noopener">
+                                    <img :src="t.proof_url" class="proof-thumb" alt="Bukti pembayaran" />
+                                </a>
+                                <span v-else>-</span>
                             </div>
                         </div>
                     </div>
@@ -671,6 +731,10 @@
     </div>
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <!-- Cuma dipakai saat export Laporan (fitur yang memang sudah butuh online) -->
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/jspdf@2/dist/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf-autotable@3/dist/jspdf.plugin.autotable.js"></script>
     <script type="module" src="./js/app.js"></script>
 </body>
 </html>

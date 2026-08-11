@@ -3,6 +3,7 @@ import {
     saveTransaction,
     getAllTransactions,
     getTransactionsByStatus,
+    updateTransaction,
     getAllProducts,
     getProductById,
     upsertProduct,
@@ -22,7 +23,17 @@ import {
     printText,
     isBluetoothSupported,
 } from './printer.js';
-import { performSync, syncTransaction, syncProduct, syncCategory, syncSupplier, uploadProductImage, fetchReport } from './sync.js';
+import {
+    performSync,
+    syncTransaction,
+    syncProduct,
+    syncCategory,
+    syncSupplier,
+    uploadProductImage,
+    uploadPaymentProof,
+    fetchReport,
+} from './sync.js';
+import { exportReportToExcel, exportReportToPdf } from './export.js';
 
 const { createApp, ref, computed, onMounted, watch } = Vue;
 
@@ -389,6 +400,8 @@ createApp({
         const taxPercent = ref(config.value.default_tax_percent);
         const cashierName = ref(config.value.default_cashier);
         const paymentMethod = ref('cash');
+        const cashReceived = ref(null);
+        const proofLocalData = ref(null);
 
         const addToCart = (product) => {
             const existing = cart.value.find((item) => item.id === product.id);
@@ -417,6 +430,24 @@ createApp({
             cart.value = [];
             discountPercent.value = 0;
             taxPercent.value = config.value.default_tax_percent;
+            cashReceived.value = null;
+            proofLocalData.value = null;
+        };
+
+        const handleProofPhotoChange = async (event) => {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            try {
+                proofLocalData.value = await resizeImageToDataURL(file, 800, 0.7);
+            } catch (error) {
+                showNotification(`Gagal memproses foto: ${error.message}`, 'error');
+            } finally {
+                event.target.value = '';
+            }
+        };
+
+        const removeProofPhoto = () => {
+            proofLocalData.value = null;
         };
 
         const subtotal = computed(() => cart.value.reduce((sum, item) => sum + item.price * item.qty, 0));
@@ -424,6 +455,13 @@ createApp({
         const afterDiscount = computed(() => subtotal.value - discountAmount.value);
         const taxAmount = computed(() => Math.floor(afterDiscount.value * (taxPercent.value / 100)));
         const total = computed(() => afterDiscount.value + taxAmount.value);
+
+        // Kembalian cuma dihitung kalau kasir isi jumlah uang diterima -- kalau dikosongkan,
+        // dianggap tidak dicatat (mis. sudah pas) dan transaksi tetap boleh dilanjutkan.
+        const changeAmount = computed(() => {
+            if (paymentMethod.value !== 'cash' || cashReceived.value === null || cashReceived.value === '') return null;
+            return Number(cashReceived.value) - total.value;
+        });
 
         // ========================
         // TRANSAKSI
@@ -440,6 +478,14 @@ createApp({
         const completeTransaction = async () => {
             if (cart.value.length === 0) return;
 
+            const isCash = paymentMethod.value === 'cash';
+            const hasCashReceived = isCash && cashReceived.value !== null && cashReceived.value !== '';
+            if (hasCashReceived && Number(cashReceived.value) < total.value) {
+                showNotification('Uang diterima kurang dari total belanja', 'error');
+                return;
+            }
+            const hasProof = !isCash && Boolean(proofLocalData.value);
+
             const transactionData = {
                 id: `TXN-${Date.now()}`,
                 timestamp: new Date().toISOString(),
@@ -452,9 +498,15 @@ createApp({
                 tax: taxAmount.value,
                 total: total.value,
                 payment_method: paymentMethod.value,
+                cash_received: hasCashReceived ? Number(cashReceived.value) : null,
+                change_amount: hasCashReceived ? Number(cashReceived.value) - total.value : null,
                 device_id: config.value.device_id,
                 sync_status: 'pending',
             };
+            if (hasProof) {
+                transactionData.proof_local_data = proofLocalData.value;
+                transactionData.proof_pending_upload = true;
+            }
 
             try {
                 await saveTransaction(transactionData);
@@ -487,6 +539,10 @@ createApp({
                             lastTransaction.value.sync_status = 'synced';
                         }
                         refreshPendingTransactions();
+                        // Bukti cuma bisa ditempel setelah baris transaksinya ada di sheet.
+                        if (ok && hasProof) {
+                            uploadPaymentProof(config.value, transactionData);
+                        }
                     });
                 }
             } catch (error) {
@@ -534,6 +590,28 @@ createApp({
             showReceiptModal.value = true;
         };
 
+        // Untuk transaksi non-tunai yang buktinya belum sempat difoto saat checkout --
+        // bisa dilengkapi belakangan dari Riwayat, tidak wajib saat itu juga.
+        const attachProofLater = async (txn, event) => {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            try {
+                const dataUrl = await resizeImageToDataURL(file, 800, 0.7);
+                await updateTransaction(txn.id, { proof_local_data: dataUrl, proof_pending_upload: true });
+                await loadTransactionHistory();
+                showNotification('Bukti tersimpan, akan diupload saat online', 'success');
+                if (navigator.onLine && isConfigured(config.value) && txn.sync_status === 'synced') {
+                    const updated = await getAllTransactions();
+                    const fresh = updated.find((t) => t.id === txn.id);
+                    if (fresh) uploadPaymentProof(config.value, fresh).then(loadTransactionHistory);
+                }
+            } catch (error) {
+                showNotification(`Gagal memproses foto: ${error.message}`, 'error');
+            } finally {
+                event.target.value = '';
+            }
+        };
+
         // ========================
         // LAPORAN HARIAN / BULANAN (gabungan semua device, dari Google Sheets)
         // ========================
@@ -566,6 +644,24 @@ createApp({
                 showNotification(`Gagal memuat laporan: ${error.message}`, 'error');
             } finally {
                 loadingReport.value = false;
+            }
+        };
+
+        const handleExportExcel = () => {
+            if (!reportData.value) return;
+            try {
+                exportReportToExcel(reportData.value, config.value, reportPeriod.value, reportDate.value);
+            } catch (error) {
+                showNotification(error.message, 'error');
+            }
+        };
+
+        const handleExportPdf = () => {
+            if (!reportData.value) return;
+            try {
+                exportReportToPdf(reportData.value, config.value, reportPeriod.value, reportDate.value);
+            } catch (error) {
+                showNotification(error.message, 'error');
             }
         };
 
@@ -833,6 +929,11 @@ createApp({
             taxPercent,
             cashierName,
             paymentMethod,
+            cashReceived,
+            changeAmount,
+            proofLocalData,
+            handleProofPhotoChange,
+            removeProofPhoto,
             subtotal,
             discountAmount,
             taxAmount,
@@ -855,6 +956,7 @@ createApp({
             filteredHistory,
             historyTotal,
             openHistoryReceipt,
+            attachProofLater,
 
             reportPeriod,
             reportDate,
@@ -862,6 +964,8 @@ createApp({
             loadingReport,
             setReportPeriod,
             loadReport,
+            handleExportExcel,
+            handleExportPdf,
 
             printerConnected,
             connectedPrinterName,

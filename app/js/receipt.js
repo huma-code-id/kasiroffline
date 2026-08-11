@@ -41,6 +41,10 @@ export function generateReceiptText(transaction, config) {
     lines.push(`TOTAL                 Rp ${transaction.total.toLocaleString('id-ID')}`);
     lines.push(rule('='));
     lines.push(`Pembayaran: ${transaction.payment_method.toUpperCase()}`);
+    if (transaction.payment_method === 'cash' && transaction.cash_received) {
+        lines.push(`Bayar     : Rp ${transaction.cash_received.toLocaleString('id-ID')}`);
+        lines.push(`Kembali   : Rp ${(transaction.change_amount || 0).toLocaleString('id-ID')}`);
+    }
     lines.push('');
     lines.push(center('Terima kasih!'));
 
@@ -89,6 +93,10 @@ export function formatReceiptESCPOS(transaction, config) {
 
     lines.push(rule('-'));
     lines.push(`Pembayaran   : ${transaction.payment_method.toUpperCase()}`);
+    if (transaction.payment_method === 'cash' && transaction.cash_received) {
+        lines.push(`Bayar        : Rp ${transaction.cash_received.toString().padStart(8)}`);
+        lines.push(`Kembali      : Rp ${(transaction.change_amount || 0).toString().padStart(8)}`);
+    }
     lines.push(rule('='));
 
     lines.push('\x1B\x61\x01');

@@ -376,6 +376,11 @@ body {
     padding-top: 10px;
 }
 
+.summary-row.warning {
+    font-weight: 700;
+    color: #dc2626;
+}
+
 .input-group {
     margin-bottom: 10px;
 }
@@ -691,7 +696,25 @@ body {
 
 .history-table .product-table-head,
 .history-table .product-row {
-    grid-template-columns: 1.6fr 1fr 1fr 0.8fr 1fr;
+    grid-template-columns: 1.6fr 1fr 1fr 0.8fr 0.9fr 1fr;
+}
+
+.file-btn {
+    display: inline-block;
+    text-align: center;
+}
+
+.report-tx-table .product-table-head,
+.report-tx-table .product-row {
+    grid-template-columns: 1.6fr 1fr 0.9fr 1fr 0.8fr;
+}
+
+.proof-thumb {
+    width: 36px;
+    height: 36px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #e5e7eb;
 }
 
 .product-table-head {

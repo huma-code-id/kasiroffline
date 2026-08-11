@@ -13,6 +13,8 @@ import { dataURLToBase64 } from './image.js';
 import {
     getTransactionsByStatus,
     updateTransactionStatus,
+    updateTransaction,
+    getTransactionsPendingProofUpload,
     getPendingProducts,
     getProductById,
     upsertProduct,
@@ -77,6 +79,50 @@ export async function syncPendingTransactions(config) {
         if (ok) syncedCount++;
     }
     return syncedCount;
+}
+
+// ========================
+// BUKTI PEMBAYARAN (Transfer/QRIS/GoPay)
+// ========================
+
+export async function uploadPaymentProof(config, transaction) {
+    if (!transaction.proof_local_data) return false;
+
+    const { base64, mimeType } = dataURLToBase64(transaction.proof_local_data);
+    const payload = {
+        transaction_id: transaction.id,
+        filename: 'BUKTI-' + transaction.id + '.jpg',
+        mime_type: mimeType,
+        image_base64: base64,
+    };
+
+    const envelope = await buildSignedEnvelope('upload_payment_proof', config, payload);
+    const result = await postJSON(config.gas_endpoint, envelope);
+
+    if (result.success && result.data && result.data.proof_url) {
+        await updateTransaction(transaction.id, {
+            proof_url: result.data.proof_url,
+            proof_local_data: null,
+            proof_pending_upload: false,
+        });
+        return true;
+    }
+
+    console.warn('Upload bukti pembayaran gagal:', transaction.id, result.error);
+    return false;
+}
+
+export async function pushPendingPaymentProofs(config) {
+    const pending = await getTransactionsPendingProofUpload();
+    let count = 0;
+    for (const txn of pending) {
+        // Bukti cuma bisa ditempel ke baris transaksi yang sudah ada di sheet -- transaksi
+        // yang belum sync (masih 'pending') dilewati dulu, akan dicoba lagi setelah tersync.
+        if (txn.sync_status !== 'synced') continue;
+        const ok = await uploadPaymentProof(config, txn);
+        if (ok) count++;
+    }
+    return count;
 }
 
 // ========================
@@ -323,6 +369,7 @@ export async function performSync(config) {
         productsPushed: 0,
         imagesUploaded: 0,
         productsPulled: 0,
+        proofsUploaded: 0,
         skipped: false,
     };
 
@@ -332,6 +379,7 @@ export async function performSync(config) {
     }
 
     result.transactions = await syncPendingTransactions(config);
+    result.proofsUploaded = await pushPendingPaymentProofs(config);
 
     result.categoriesPushed = await pushPendingCategories(config);
     result.categoriesPulled = await pullCategories(config);

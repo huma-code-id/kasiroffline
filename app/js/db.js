@@ -85,6 +85,20 @@ export async function updateTransactionStatus(id, newStatus, extra = {}) {
     return requestToPromise(store.put(data));
 }
 
+export async function updateTransaction(id, patch) {
+    const store = getStore('transactions', 'readwrite');
+    const data = await requestToPromise(store.get(id));
+    if (!data) return;
+    Object.assign(data, patch);
+    return requestToPromise(store.put(data));
+}
+
+// Transaksi non-tunai yang punya foto bukti lokal menunggu upload (dibuat/diedit saat offline).
+export async function getTransactionsPendingProofUpload() {
+    const all = await getAllTransactions();
+    return all.filter((t) => t.proof_pending_upload && t.proof_local_data);
+}
+
 // ========================
 // PRODUCTS
 // ========================
