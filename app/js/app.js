@@ -731,6 +731,17 @@ createApp({
                     await loadProducts();
                     await loadCategories();
                     await loadSuppliers();
+
+                    if (result.newLogoUrl) {
+                        config.value = {
+                            ...config.value,
+                            logo_url: result.newLogoUrl,
+                            logo_local_data: null,
+                            logo_pending_upload: false,
+                        };
+                        saveConfig(config.value);
+                    }
+
                     const anythingSynced =
                         result.transactions ||
                         result.productsPushed ||
@@ -739,7 +750,9 @@ createApp({
                         result.categoriesPulled ||
                         result.suppliersPushed ||
                         result.suppliersPulled ||
-                        result.imagesUploaded;
+                        result.imagesUploaded ||
+                        result.logoUploaded ||
+                        result.logoPulled;
                     if (anythingSynced) {
                         showNotification('Sinkronisasi selesai', 'success');
                     }
@@ -808,6 +821,45 @@ createApp({
             saveConfig(config.value);
             showNotification('PIN kunci Pengaturan dihapus — Pengaturan tidak terkunci lagi', 'info');
         };
+
+        // Logo & judul tab browser (branding) -- logo diterapkan & disimpan langsung begitu
+        // dipilih (bukan menunggu tombol Simpan), sama seperti pola upload foto produk:
+        // tampil offline seketika, lalu otomatis diupload ke cloud saat online supaya semua
+        // device toko yang sama ikut dapat logo terbaru (lihat pullStoreLogo di sync.js).
+        const activeLogoUrl = computed(() => config.value.logo_local_data || config.value.logo_url || './icons/icon-192.png');
+
+        const onLogoFileSelected = async (event) => {
+            const file = event.target.files && event.target.files[0];
+            event.target.value = ''; // supaya file yang sama bisa dipilih ulang nanti
+            if (!file) return;
+
+            try {
+                const dataUrl = await resizeImageToDataURL(file, 512, 0.85);
+                config.value = { ...config.value, logo_local_data: dataUrl, logo_pending_upload: true };
+                saveConfig(config.value);
+                showNotification('Logo diperbarui — mengunggah ke cloud...', 'info');
+                if (navigator.onLine) runSync();
+            } catch (error) {
+                showNotification('Gagal membaca file logo: ' + error.message, 'error');
+            }
+        };
+
+        watch(
+            () => config.value.store_name,
+            (name) => {
+                document.title = name || 'Kasir Offline';
+            },
+            { immediate: true }
+        );
+
+        watch(
+            activeLogoUrl,
+            (url) => {
+                const link = document.getElementById('favicon-link');
+                if (link) link.href = url;
+            },
+            { immediate: true }
+        );
 
         // ========================
         // NOTIFIKASI
@@ -1005,6 +1057,8 @@ createApp({
             unlockSettings,
             saveSettings,
             removeSettingsPin,
+            activeLogoUrl,
+            onLogoFileSelected,
 
             updateAvailable,
             applyUpdateNow,

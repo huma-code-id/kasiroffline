@@ -439,6 +439,22 @@ body {
     background: #f3f4f6;
 }
 
+.logo-upload-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.logo-preview {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #f3f4f6;
+    flex-shrink: 0;
+}
+
 /* CART */
 .cart-items {
     flex: 1;

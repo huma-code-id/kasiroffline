@@ -11,7 +11,7 @@
     <title>Kasir Offline</title>
 
     <link rel="manifest" href="./manifest.json" />
-    <link rel="icon" href="./icons/icon-192.png" />
+    <link id="favicon-link" rel="icon" href="./icons/icon-192.png" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
     <link rel="stylesheet" href="./css/style.css" />
 </head>
@@ -20,7 +20,7 @@
         <!-- HEADER -->
         <div class="header">
             <h1 class="app-title">
-                <img src="./icons/icon-192.png" alt="" class="app-logo" />
+                <img :src="activeLogoUrl" alt="" class="app-logo" />
                 {{ config.store_name || 'Kasir Offline' }}
             </h1>
 
@@ -677,7 +677,19 @@
                 <!-- FORM PENGATURAN (setelah PIN benar, atau kalau belum pernah diset PIN) -->
                 <template v-else>
                     <div class="input-group">
-                        <label>Nama Toko</label>
+                        <label>Logo Toko</label>
+                        <div class="logo-upload-row">
+                            <img :src="activeLogoUrl" alt="" class="logo-preview" />
+                            <input type="file" accept="image/*" @change="onLogoFileSelected" />
+                        </div>
+                        <p class="pin-hint">
+                            Tampil di header app & tab browser. Diterapkan langsung begitu dipilih, lalu otomatis
+                            diupload ke cloud saat online supaya sama di semua perangkat kasir toko ini.
+                        </p>
+                        <p v-if="config.logo_pending_upload" class="pin-hint">⏳ Menunggu upload ke cloud...</p>
+                    </div>
+                    <div class="input-group">
+                        <label>Nama Toko <span style="font-weight: normal; color: #6b7280">(juga jadi judul tab browser)</span></label>
                         <input v-model="settingsForm.store_name" type="text" />
                     </div>
                     <div class="input-group">

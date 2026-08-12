@@ -335,6 +335,46 @@ export async function pullSuppliers(config) {
 }
 
 // ========================
+// LOGO TOKO (branding, sync ke cloud biar sama di semua device toko yang sama)
+// ========================
+
+export async function uploadStoreLogo(config) {
+    if (!config.logo_local_data) return null;
+
+    const { base64, mimeType } = dataURLToBase64(config.logo_local_data);
+    const payload = {
+        filename: 'STORE-LOGO.jpg',
+        mime_type: mimeType,
+        image_base64: base64,
+    };
+
+    const envelope = await buildSignedEnvelope('upload_store_logo', config, payload);
+    const result = await postJSON(config.gas_endpoint, envelope);
+
+    if (result.success && result.data && result.data.logo_url) {
+        return result.data.logo_url;
+    }
+
+    console.warn('Upload logo toko gagal:', result.error);
+    return null;
+}
+
+export async function pullStoreLogo(config) {
+    const envelope = {
+        action: 'get_store_settings',
+        device_id: config.device_id,
+        api_key: config.api_key,
+        timestamp: new Date().toISOString(),
+    };
+    const result = await postJSON(config.gas_endpoint, envelope);
+    if (!result.success) return null;
+
+    const remoteLogoUrl = (result.data && result.data.logo_url) || '';
+    if (!remoteLogoUrl || remoteLogoUrl === config.logo_url) return null;
+    return remoteLogoUrl;
+}
+
+// ========================
 // LAPORAN
 // ========================
 
@@ -372,6 +412,9 @@ export async function performSync(config) {
         imagesUploaded: 0,
         productsPulled: 0,
         proofsUploaded: 0,
+        logoUploaded: false,
+        logoPulled: false,
+        newLogoUrl: null,
         skipped: false,
     };
 
@@ -382,6 +425,22 @@ export async function performSync(config) {
 
     result.transactions = await syncPendingTransactions(config);
     result.proofsUploaded = await pushPendingPaymentProofs(config);
+
+    // Logo lokal yang belum terupload harus didahulukan dari sekadar menarik logo_url lama
+    // dari server, supaya perubahan yang baru saja dibuat di device ini tidak keburu ditimpa.
+    if (config.logo_pending_upload) {
+        const uploadedUrl = await uploadStoreLogo(config);
+        if (uploadedUrl) {
+            result.newLogoUrl = uploadedUrl;
+            result.logoUploaded = true;
+        }
+    } else {
+        const pulledUrl = await pullStoreLogo(config);
+        if (pulledUrl) {
+            result.newLogoUrl = pulledUrl;
+            result.logoPulled = true;
+        }
+    }
 
     result.categoriesPushed = await pushPendingCategories(config);
     result.categoriesPulled = await pullCategories(config);

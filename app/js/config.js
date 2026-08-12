@@ -15,6 +15,9 @@ const DEFAULTS = {
     default_cashier: 'Kasir 1',
     printer_service_uuid: '',
     admin_pin_hash: '', // kosong = Pengaturan tidak terkunci
+    logo_url: '', // logo toko tersinkron dari cloud (Drive) -- sama otomatis di semua device toko yang sama
+    logo_local_data: null, // data URL logo yang baru dipilih di device ini, menunggu upload ke cloud
+    logo_pending_upload: false,
 };
 
 function generateDeviceId() {
