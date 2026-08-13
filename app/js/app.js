@@ -50,9 +50,16 @@ createApp({
 
         const rupiah = (n) => 'Rp ' + Math.round(n || 0).toLocaleString('id-ID');
 
+        const showMobileMenu = ref(false);
+
         const switchView = (view) => {
             currentView.value = view;
+            showMobileMenu.value = false;
             if (view === 'riwayat') loadTransactionHistory();
+        };
+
+        const toggleMobileMenu = () => {
+            showMobileMenu.value = !showMobileMenu.value;
         };
 
         // ========================
@@ -950,6 +957,8 @@ createApp({
             config,
             currentView,
             switchView,
+            showMobileMenu,
+            toggleMobileMenu,
             bluetoothSupported,
             rupiah,
 
