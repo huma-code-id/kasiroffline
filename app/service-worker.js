@@ -3,7 +3,7 @@
 // di-intercept sama sekali, jadi selalu langsung ke network (tidak relevan di-cache & tidak
 // boleh diam-diam gagal karena cache).
 
-const CACHE_NAME = 'kasir-offline-v9';
+const CACHE_NAME = 'kasir-offline-v10';
 
 const APP_SHELL = [
     './',

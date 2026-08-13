@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="theme-color" content="#667eea" />
+    <meta name="theme-color" content="#006d36" />
     <meta name="description" content="Aplikasi kasir offline-first dengan manajemen produk dan sinkronisasi cloud" />
 
     <title>Kasir Offline</title>
@@ -13,44 +13,83 @@
     <link rel="manifest" href="./manifest.json" />
     <link id="favicon-link" rel="icon" href="./icons/icon-192.png" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./css/style.css" />
 </head>
 <body>
     <div id="app">
-        <!-- HEADER -->
-        <div class="header">
-            <h1 class="app-title">
-                <img :src="activeLogoUrl" alt="" class="app-logo" />
-                {{ config.store_name || 'Kasir Offline' }}
-            </h1>
+        <div class="shell">
+            <!-- SIDEBAR (desktop) -->
+            <aside class="sidebar">
+                <div class="sidebar-brand">
+                    <img :src="activeLogoUrl" alt="" class="app-logo" />
+                    <div class="sidebar-brand-text">
+                        <div class="sidebar-title">{{ config.store_name || 'Kasir Offline' }}</div>
+                        <div class="sidebar-subtitle">{{ config.device_id || 'Kasir Offline' }}</div>
+                    </div>
+                </div>
 
-            <nav class="view-switch">
-                <button :class="{ active: currentView === 'kasir' }" @click="switchView('kasir')">🧾 Kasir</button>
-                <button :class="{ active: currentView === 'produk' }" @click="switchView('produk')">📦 Produk</button>
-                <button :class="{ active: currentView === 'kategori' }" @click="switchView('kategori')">🏷️ Kategori</button>
-                <button :class="{ active: currentView === 'supplier' }" @click="switchView('supplier')">🚚 Supplier</button>
-                <button :class="{ active: currentView === 'riwayat' }" @click="switchView('riwayat')">📜 Riwayat</button>
-                <button :class="{ active: currentView === 'laporan' }" @click="switchView('laporan')">📊 Laporan</button>
-            </nav>
+                <nav class="sidebar-nav">
+                    <button :class="{ active: currentView === 'kasir' }" @click="switchView('kasir')">
+                        <span class="nav-icon">🧾</span><span>Kasir</span>
+                    </button>
+                    <button :class="{ active: currentView === 'produk' }" @click="switchView('produk')">
+                        <span class="nav-icon">📦</span><span>Produk</span>
+                    </button>
+                    <button :class="{ active: currentView === 'kategori' }" @click="switchView('kategori')">
+                        <span class="nav-icon">🏷️</span><span>Kategori</span>
+                    </button>
+                    <button :class="{ active: currentView === 'supplier' }" @click="switchView('supplier')">
+                        <span class="nav-icon">🚚</span><span>Supplier</span>
+                    </button>
+                    <button :class="{ active: currentView === 'riwayat' }" @click="switchView('riwayat')">
+                        <span class="nav-icon">📜</span><span>Riwayat</span>
+                    </button>
+                    <button :class="{ active: currentView === 'laporan' }" @click="switchView('laporan')">
+                        <span class="nav-icon">📊</span><span>Laporan</span>
+                    </button>
+                </nav>
 
-            <div class="status-bar">
-                <div class="status-indicator">
-                    <div class="status-dot" :class="isOnline ? 'online' : 'offline'"></div>
-                    <span>{{ isOnline ? 'Online' : 'Offline' }}</span>
+                <div class="sidebar-footer">
+                    <div class="status-indicator">
+                        <div class="status-dot" :class="isOnline ? 'online' : 'offline'"></div>
+                        <span>{{ isOnline ? 'Online' : 'Offline' }}</span>
+                    </div>
+                    <div class="status-indicator">
+                        <div class="status-dot" :class="printerConnected ? 'printer-ok' : 'printer-fail'"></div>
+                        <span>{{ printerConnected ? 'Printer Ready' : 'No Printer' }}</span>
+                    </div>
+                    <div class="status-indicator">
+                        <span>{{ pendingTransactions.length }} pending</span>
+                    </div>
+                    <button v-if="updateAvailable" class="update-badge" @click="applyUpdateNow" title="Klik untuk memuat versi terbaru">
+                        🔄 Update tersedia
+                    </button>
+                    <button class="sidebar-settings-btn" @click="openSettings">
+                        <span class="nav-icon">⚙️</span><span>Pengaturan</span>
+                    </button>
                 </div>
-                <div class="status-indicator">
-                    <div class="status-dot" :class="printerConnected ? 'printer-ok' : 'printer-fail'"></div>
-                    <span>{{ printerConnected ? 'Printer Ready' : 'No Printer' }}</span>
+            </aside>
+
+            <!-- MAIN COLUMN -->
+            <div class="main-column">
+                <!-- TOPBAR (mobile, sticky) -->
+                <div class="mobile-topbar">
+                    <div class="app-title">
+                        <img :src="activeLogoUrl" alt="" class="app-logo" />
+                        {{ config.store_name || 'Kasir Offline' }}
+                    </div>
+                    <div class="mobile-topbar-actions">
+                        <span v-if="pendingTransactions.length" class="mobile-pending-badge">{{ pendingTransactions.length }}</span>
+                        <button v-if="updateAvailable" class="update-badge" @click="applyUpdateNow" title="Klik untuk memuat versi terbaru">🔄</button>
+                        <div class="status-dot" :class="isOnline ? 'online' : 'offline'" :title="isOnline ? 'Online' : 'Offline'"></div>
+                        <button class="btn-icon" @click="openSettings" title="Pengaturan">⚙️</button>
+                    </div>
                 </div>
-                <div class="status-indicator">
-                    <span>{{ pendingTransactions.length }} pending</span>
-                </div>
-                <button v-if="updateAvailable" class="update-badge" @click="applyUpdateNow" title="Klik untuk memuat versi terbaru">
-                    🔄 Update tersedia
-                </button>
-                <button class="btn-icon" @click="openSettings" title="Pengaturan">⚙️</button>
-            </div>
-        </div>
+
+                <main class="main-content">
 
         <!-- ==================== KASIR VIEW ==================== -->
         <div class="app-container" v-if="currentView === 'kasir'">
@@ -82,8 +121,11 @@
                             :class="{ selected: isInCart(product.id) }"
                             @click="addToCart(product)"
                         >
-                            <img v-if="productImageSrc(product)" :src="productImageSrc(product)" class="product-thumb" alt="" />
-                            <div v-else class="product-thumb product-thumb-placeholder">📦</div>
+                            <div class="product-thumb-wrap">
+                                <img v-if="productImageSrc(product)" :src="productImageSrc(product)" class="product-thumb" alt="" />
+                                <div v-else class="product-thumb product-thumb-placeholder">📦</div>
+                                <div v-if="isInCart(product.id)" class="product-check">✓</div>
+                            </div>
                             <div class="product-name">{{ product.name }}</div>
                             <div class="product-price">{{ rupiah(product.price) }}</div>
                             <div
@@ -753,8 +795,37 @@
             </div>
         </div>
 
+                </main>
+            </div>
+        </div>
+
+        <!-- MOBILE STICKY BOTTOM NAV -->
+        <nav class="mobile-tabbar">
+            <button :class="{ active: currentView === 'kasir' }" @click="switchView('kasir')">
+                <span class="tab-icon">🧾</span><span>Kasir</span>
+            </button>
+            <button :class="{ active: currentView === 'riwayat' }" @click="switchView('riwayat')">
+                <span class="tab-icon">📜</span><span>Riwayat</span>
+            </button>
+            <button :class="{ active: currentView === 'laporan' }" @click="switchView('laporan')">
+                <span class="tab-icon">📊</span><span>Laporan</span>
+            </button>
+            <button :class="{ active: showMobileMenu }" @click="toggleMobileMenu">
+                <span class="tab-icon">☰</span><span>Menu</span>
+            </button>
+        </nav>
+
+        <!-- MOBILE MORE MENU SHEET -->
+        <div class="mobile-menu-backdrop" v-if="showMobileMenu" @click="showMobileMenu = false"></div>
+        <div class="mobile-menu-sheet" v-if="showMobileMenu">
+            <button :class="{ active: currentView === 'produk' }" @click="switchView('produk')">📦 Produk</button>
+            <button :class="{ active: currentView === 'kategori' }" @click="switchView('kategori')">🏷️ Kategori</button>
+            <button :class="{ active: currentView === 'supplier' }" @click="switchView('supplier')">🚚 Supplier</button>
+            <button @click="openSettings(); showMobileMenu = false">⚙️ Pengaturan</button>
+        </div>
+
         <!-- NOTIFICATIONS -->
-        <div v-for="(notif, idx) in notifications" :key="notif.id" class="notification" :class="notif.type" :style="{ bottom: (20 + idx * 60) + 'px' }">
+        <div v-for="(notif, idx) in notifications" :key="notif.id" class="notification" :class="notif.type" :style="{ bottom: 'calc(var(--notif-base, 20px) + ' + (idx * 60) + 'px)' }">
             {{ notif.message }}
         </div>
     </div>
